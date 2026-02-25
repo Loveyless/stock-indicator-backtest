@@ -16,6 +16,10 @@ Node.js 版本：遍历股票 CSV 数据，计算技术指标信号，并统计�
 
 运行时会显示处理进度；结束后会在项目根目录生成报告：`量化分析结果+YYYY_MM_DD_HH_mm_ss.html`（北京时间）。
 
+3) 回测（默认策略 ER，长仓）：
+
+`npm run backtest -- --files=sz000001.csv --start=20070101 --end=20220930 --quiet`
+
 ## Parameters
 
 推荐直接用 node 运行以传参：
