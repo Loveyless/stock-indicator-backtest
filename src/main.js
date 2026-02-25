@@ -39,6 +39,7 @@ const { computeSignalKD } = require('./technicalIndicator');
 const { DescribeAccumulator } = require('./stats');
 const { computeSignalsErLongOnly } = require('./strategyEr');
 const { simulateLongOnly } = require('./backtest');
+const { buildExecutionEvents, simulatePortfolioEqualWeight } = require('./backtestPortfolio');
 
 const DEFAULT_DAY_LIST = [1, 2, 3, 5, 10, 20];
 const DEFAULT_START_TIME = '20070101';
@@ -75,7 +76,7 @@ function parseArgs(argv) {
     exactQuantiles: false,
 
     // backtest only
-    capital: 10000,
+    capital: 1000000,
     execution: 'next_close', // close | next_close
     lot: 100,
     feeBps: 0,
@@ -621,9 +622,9 @@ function renderBacktestReportHtml({ title, meta, strategy, summary, perFileRows,
 
         <section class="card">
           <h2>Per File</h2>
-          <div class="hint">说明：A 股长仓回测；多文件情况下不生成“组合资金曲线”，避免凭空假设仓位分配。</div>
+          <div class="hint">说明：A 股长仓回测；同日多票入场按现金平均分仓（仅对当日新增入场票）。</div>
           <table class="table">${perFileHead}${perFileBody}</table>
-          ${equityCurveSvg ? `<details><summary>Equity Curve</summary>${equityCurveSvg}</details>` : '<div class="hint">提示：要看单只股票的资金曲线，请用 `--files=xxx.csv` 限定单文件。</div>'}
+          ${equityCurveSvg ? `<details open><summary>Portfolio Equity Curve</summary>${equityCurveSvg}</details>` : '<div class="hint">无组合净值数据（可能没有任何成交）。</div>'}
         </section>
 
         <section class="card">
@@ -670,6 +671,8 @@ function main() {
   }
 
   if (args.mode === 'backtest') {
+    const seriesByFile = new Map();
+    const portfolioEvents = [];
     const perFile = [];
 
     const totalFiles = fileList.length;
@@ -712,6 +715,17 @@ function main() {
       }
 
       const { entry, exit } = computeSignalsErLongOnly({ highAdj, lowAdj, closeAdj }, { span: args.erSpan });
+
+      // 组合回测需要：事件 + 收盘序列（用于净值曲线与回撤）
+      const evs = buildExecutionEvents(
+        { file: f, datesYmd: dates, closeAdj, entrySignal: entry, exitSignal: exit },
+        { startYmd, endYmd, execution: args.execution },
+      );
+      if (evs.length) {
+        seriesByFile.set(f, { datesYmd: dates, closeAdj });
+        for (const e of evs) portfolioEvents.push(e);
+      }
+
       const r = simulateLongOnly(
         { datesYmd: dates, closeAdj, entrySignal: entry, exitSignal: exit },
         {
@@ -747,6 +761,18 @@ function main() {
       return br - ar;
     });
 
+    const portfolio = simulatePortfolioEqualWeight(
+      { seriesByFile, events: portfolioEvents },
+      {
+        startYmd,
+        endYmd,
+        initialCapital: args.capital,
+        lot: args.lot,
+        feeBps: args.feeBps,
+        stampBps: args.stampBps,
+      },
+    );
+
     const totalTrades = perFile.reduce((s, x) => s + x.trades, 0);
     const winTrades = perFile.reduce((s, x) => s + x.wins, 0);
     const pooledWinRate = totalTrades ? winTrades / totalTrades : Number.NaN;
@@ -759,8 +785,7 @@ function main() {
     const reportName = `量化分析结果+${ts}.html`;
     const reportPath = path.join(projectRoot, reportName);
 
-    const singleEquity = args.files && args.files.length === 1 ? perFile.find((x) => x.file === args.files[0]) : null;
-    const equityCurveSvg = singleEquity && singleEquity.equityCurve.length ? renderEquityCurveSvg(singleEquity.equityCurve) : '';
+    const equityCurveSvg = portfolio.equityCurve && portfolio.equityCurve.length ? renderEquityCurveSvg(portfolio.equityCurve) : '';
 
     const elapsedSec = Math.round((Date.now() - startedAt) / 1000);
     const notes = [
@@ -769,7 +794,7 @@ function main() {
       `- 执行价：${args.execution}（为避免“收盘生成信号又用同一收盘成交”的偷看，默认 next_close）。`,
       `- 股数：按 lot=${args.lot} 整手交易；资金不足则跳过该次入场。`,
       `- 手续费：fee_bps=${args.feeBps}；印花税（卖出）：stamp_bps=${args.stampBps}。`,
-      `- 多文件只做“逐文件回测 + 汇总表”，不做组合净值曲线（否则必须先定义仓位分配/并发持仓/选股规则）。`,
+      `- 同一交易日多票入场：对“当日新增入场票”按现金平均分仓（不会对存量持仓做再平衡）。`,
     ].join('\n');
 
     const html = renderBacktestReportHtml({
@@ -793,6 +818,11 @@ function main() {
       strategy: '默认策略（ER）：仅做多。入场 BearPower 上穿 0；出场 BullPower 下穿 0；EMA(CLOSE, N)。',
       summary: {
         files: String(perFile.length),
+        portfolio_final_equity: Number.isFinite(portfolio.finalEquity) ? formatNum(portfolio.finalEquity) : 'NaN',
+        portfolio_total_return: Number.isFinite(portfolio.totalReturn) ? (portfolio.totalReturn * 100).toFixed(2) + '%' : 'NaN',
+        portfolio_max_dd: Number.isFinite(portfolio.maxDrawdown) ? (portfolio.maxDrawdown * 100).toFixed(2) + '%' : 'NaN',
+        portfolio_trades: String(portfolio.trades.length),
+        portfolio_win_rate: Number.isFinite(portfolio.winRate) ? (portfolio.winRate * 100).toFixed(2) + '%' : 'NaN',
         trades_total: String(totalTrades),
         win_rate_pooled: Number.isFinite(pooledWinRate) ? (pooledWinRate * 100).toFixed(2) + '%' : 'NaN',
         avg_total_return_per_file: Number.isFinite(avgReturn) ? (avgReturn * 100).toFixed(2) + '%' : 'NaN',
