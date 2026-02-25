@@ -29,13 +29,14 @@ Node.js 版本：遍历股票 CSV 数据，计算技术指标信号，并统计�
 - `--files=sz000001.csv,sh600000.csv`
 - `--limit=10`
 - `--quiet`（不显示进度，仅输出报告路径）
+- `--encoding=gbk|utf8|auto`（默认 gbk；auto 仅做 BOM 级别识别后回退 gbk）
 - `--safe-rsv`
 - `--exact-quantiles`
 
 ## Data
 
 - 数据目录：`stock/`
-- CSV 默认按 `GBK` 解码，必须包含列：`交易日期`、`最低价_复权`、`最高价_复权`、`收盘价_复权`
+- CSV 默认按 `GBK` 解码（可用 `--encoding` 指定），必须包含列：`交易日期`、`最低价_复权`、`最高价_复权`、`收盘价_复权`
 - 为了避免把大量数据误提交进 git，`stock/` 已在 `.gitignore` 里默认忽略
 
 ## Notes

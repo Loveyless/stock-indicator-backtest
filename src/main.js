@@ -2,7 +2,7 @@
  * Node.js 入口脚本
  *
  * 做的事：
- * 1) 遍历 `stock/*.csv`（GBK 编码）
+ * 1) 遍历 `stock/*.csv`（默认 GBK，可用 --encoding 指定）
  * 2) 计算技术指标信号（KD 金叉/死叉）
  * 3) 计算未来 N 日涨跌幅，并按 signal 分组输出统计与概率
  *
@@ -16,6 +16,7 @@
  * - `--files=sz000001.csv,sh600000.csv`（只跑指定文件）
  * - `--limit=10`（只跑前 N 个文件）
  * - `--quiet`（不显示进度，仅输出报告路径）
+ * - `--encoding=gbk|utf8|auto`（默认 gbk；auto 仅做 BOM 级别识别后回退 gbk）
  * - `--safe-rsv`（更稳：HIGH_N==LOW_N 时不产生 inf/NaN；注意会改变信号/结果）
  * - `--exact-quantiles`（精确分位数：更慢、更吃内存）
  */
@@ -30,6 +31,7 @@ const { DescribeAccumulator } = require('./stats');
 const DEFAULT_DAY_LIST = [1, 2, 3, 5, 10, 20];
 const DEFAULT_START_TIME = '20070101';
 const DEFAULT_END_TIME = '20220930';
+const DEFAULT_ENCODING = 'gbk';
 
 function parseBool(s) {
   if (s === undefined || s === null) return false;
@@ -54,6 +56,7 @@ function parseArgs(argv) {
     files: null,
     limit: null,
     quiet: false,
+    encoding: DEFAULT_ENCODING,
     safeRsv: false,
     exactQuantiles: false,
   };
@@ -80,6 +83,10 @@ function parseArgs(argv) {
         .filter(Boolean);
       if (!list.length) throw new Error(`--files 解析失败：${raw}`);
       args.files = list;
+    } else if (raw.startsWith('--encoding=')) {
+      const enc = raw.slice('--encoding='.length).trim();
+      if (!enc) throw new Error(`--encoding 不能为空：${raw}`);
+      args.encoding = enc;
     } else if (raw.startsWith('--limit=')) {
       const n = Number(raw.slice('--limit='.length));
       if (!Number.isFinite(n) || n <= 0) throw new Error(`--limit 必须是正数：${raw}`);
@@ -109,6 +116,10 @@ function parseArgs(argv) {
     if (list.length) args.files = list;
   }
 
+  if (args.encoding === DEFAULT_ENCODING && getNpmConfig('encoding')) {
+    args.encoding = String(getNpmConfig('encoding')).trim() || DEFAULT_ENCODING;
+  }
+
   if (args.limit === null && getNpmConfig('limit')) {
     const n = Number(getNpmConfig('limit'));
     if (Number.isFinite(n) && n > 0) args.limit = Math.floor(n);
@@ -120,6 +131,38 @@ function parseArgs(argv) {
   if (!args.exactQuantiles && (parseBool(getNpmConfig('exact_quantiles')) || parseBool(getNpmConfig('exact-quantiles')))) args.exactQuantiles = true;
 
   return args;
+}
+
+function detectEncodingFromBom(buf) {
+  if (!buf || buf.length < 2) return null;
+  // UTF-8 BOM: EF BB BF
+  if (buf.length >= 3 && buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf) return 'utf8';
+  // UTF-16LE BOM: FF FE
+  if (buf[0] === 0xff && buf[1] === 0xfe) return 'utf16le';
+  // UTF-16BE BOM: FE FF（iconv-lite 对 utf16be 支持不稳定，明确报错更安全）
+  if (buf[0] === 0xfe && buf[1] === 0xff) return 'utf16be';
+  return null;
+}
+
+function decodeCsvBuffer(buf, encoding) {
+  const encRaw = String(encoding || DEFAULT_ENCODING).trim().toLowerCase();
+  const enc = encRaw === 'auto' ? (detectEncodingFromBom(buf) || DEFAULT_ENCODING) : encRaw;
+
+  if (enc === 'utf16be') {
+    throw new Error('检测到 UTF-16BE BOM（FE FF），当前不支持；请先转码为 UTF-8 或 GBK。');
+  }
+
+  if (!iconv.encodingExists(enc)) {
+    throw new Error(`不支持的编码：${encoding}`);
+  }
+
+  // 对带 BOM 的文本，先去掉 BOM，避免把 BOM 当作数据的一部分。
+  let sliceStart = 0;
+  if (enc === 'utf8' && buf.length >= 3 && buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf) sliceStart = 3;
+  if (enc === 'utf16le' && buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xfe) sliceStart = 2;
+  const body = sliceStart ? buf.subarray(sliceStart) : buf;
+
+  return iconv.decode(body, enc);
 }
 
 function parseYmdInt(dateLike) {
@@ -426,7 +469,7 @@ function main() {
 
     const fullPath = path.join(dataDir, f);
     const buf = fs.readFileSync(fullPath);
-    const text = iconv.decode(buf, 'gbk');
+    const text = decodeCsvBuffer(buf, args.encoding);
 
     const records = parse(text, {
       columns: true,
@@ -437,7 +480,9 @@ function main() {
 
     if (!records.length) continue;
     for (const col of ['交易日期', '最低价_复权', '最高价_复权', '收盘价_复权']) {
-      if (!(col in records[0])) throw new Error(`文件 ${f} 缺少必要列：${col}`);
+      if (!(col in records[0])) {
+        throw new Error(`文件 ${f} 缺少必要列：${col}（encoding=${args.encoding}；若列名乱码，尝试 --encoding=auto 或 --encoding=utf8）`);
+      }
     }
 
     const n = records.length;
@@ -536,6 +581,7 @@ function main() {
       elapsed_seconds: String(elapsedSec),
       data_dir: dataDir,
       files_total: String(totalFiles),
+      encoding: String(args.encoding),
       start: args.start,
       end: args.end,
       day_list: args.days.join(','),

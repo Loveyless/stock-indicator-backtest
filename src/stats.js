@@ -193,24 +193,31 @@ class DescribeAccumulator {
   constructor({ exactQuantiles = false } = {}) {
     this.stats = new StreamingStats();
     this.exactQuantiles = exactQuantiles;
-    this.q25 = exactQuantiles ? new ExactQuantilesBuffer() : new P2Quantile(0.25);
-    this.q50 = exactQuantiles ? new ExactQuantilesBuffer() : new P2Quantile(0.5);
-    this.q75 = exactQuantiles ? new ExactQuantilesBuffer() : new P2Quantile(0.75);
+    if (exactQuantiles) {
+      this.quantiles = new ExactQuantilesBuffer();
+    } else {
+      this.q25 = new P2Quantile(0.25);
+      this.q50 = new P2Quantile(0.5);
+      this.q75 = new P2Quantile(0.75);
+    }
   }
 
   add(x) {
     if (!Number.isFinite(x)) return;
     this.stats.add(x);
-    this.q25.add(x);
-    this.q50.add(x);
-    this.q75.add(x);
+    if (this.exactQuantiles) {
+      this.quantiles.add(x);
+    } else {
+      this.q25.add(x);
+      this.q50.add(x);
+      this.q75.add(x);
+    }
   }
 
   snapshot() {
     const base = this.stats.snapshot();
     if (this.exactQuantiles) {
-      const q = this.q25.snapshot(); // q25/q50/q75
-      return { ...base, ...q };
+      return { ...base, ...this.quantiles.snapshot() };
     }
     return {
       ...base,

@@ -10,6 +10,7 @@
 ## 编码
 
 - 默认按 `GBK` 解码（见 `src/main.js`）
+- 可用 `--encoding=gbk|utf8|auto` 指定编码；`auto` 仅做 BOM 级别识别后回退 `GBK`
 
 ## 必须列（缺一即报错）
 
