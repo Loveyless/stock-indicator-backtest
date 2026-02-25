@@ -2,7 +2,7 @@
 
 脚本结束后会在项目根目录生成报告文件：
 
-- 文件名：`量化分析结果+YYYYMMDDHHmmss.html`
+- 文件名：`量化分析结果+YYYY_MM_DD_HH_mm_ss.html`（北京时间）
 - 内容：自包含 HTML，双击即可在浏览器打开
 
 ## Run Meta

@@ -14,7 +14,7 @@ Node.js 版本：遍历股票 CSV 数据，计算技术指标信号，并统计�
 
 `npm start`
 
-运行时会显示处理进度；结束后会在项目根目录生成报告：`量化分析结果+YYYYMMDDHHmmss.html`。
+运行时会显示处理进度；结束后会在项目根目录生成报告：`量化分析结果+YYYY_MM_DD_HH_mm_ss.html`（北京时间）。
 
 ## Parameters
 

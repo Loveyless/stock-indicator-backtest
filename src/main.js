@@ -161,15 +161,55 @@ function pad2(n) {
   return String(n).padStart(2, '0');
 }
 
-function timestampYmdHms(d) {
-  return [
-    d.getFullYear(),
-    pad2(d.getMonth() + 1),
-    pad2(d.getDate()),
-    pad2(d.getHours()),
-    pad2(d.getMinutes()),
-    pad2(d.getSeconds()),
-  ].join('');
+function getBeijingDateTimeParts(d) {
+  try {
+    const parts = new Intl.DateTimeFormat('zh-CN', {
+      timeZone: 'Asia/Shanghai',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+      hourCycle: 'h23',
+    }).formatToParts(d);
+
+    const map = {};
+    for (const p of parts) {
+      if (p.type !== 'literal') map[p.type] = p.value;
+    }
+
+    return {
+      year: map.year,
+      month: map.month,
+      day: map.day,
+      hour: map.hour,
+      minute: map.minute,
+      second: map.second,
+    };
+  } catch {
+    // 兜底：按 UTC+8（北京时间）计算，避免某些运行环境缺失时区数据导致报错。
+    const bj = new Date(d.getTime() + 8 * 60 * 60 * 1000);
+    return {
+      year: String(bj.getUTCFullYear()),
+      month: pad2(bj.getUTCMonth() + 1),
+      day: pad2(bj.getUTCDate()),
+      hour: pad2(bj.getUTCHours()),
+      minute: pad2(bj.getUTCMinutes()),
+      second: pad2(bj.getUTCSeconds()),
+    };
+  }
+}
+
+function timestampBeijingYmdHmsUnderscore(d) {
+  const t = getBeijingDateTimeParts(d);
+  return `${t.year}_${t.month}_${t.day}_${t.hour}_${t.minute}_${t.second}`;
+}
+
+function formatBeijingGeneratedAt(d) {
+  const t = getBeijingDateTimeParts(d);
+  return `${t.year}-${t.month}-${t.day} ${t.hour}:${t.minute}:${t.second} (北京时间)`;
 }
 
 function renderProgress(processed, total, startedAtMs) {
@@ -461,7 +501,7 @@ function main() {
   if (!args.quiet) process.stdout.write('\n');
 
   const now = new Date();
-  const ts = timestampYmdHms(now);
+  const ts = timestampBeijingYmdHmsUnderscore(now);
   const reportName = `量化分析结果+${ts}.html`;
   const reportPath = path.join(projectRoot, reportName);
 
@@ -492,7 +532,7 @@ function main() {
   const html = renderReportHtml({
     title: `量化分析结果+${ts}`,
     meta: {
-      generated_at: now.toLocaleString(),
+      generated_at: formatBeijingGeneratedAt(now),
       elapsed_seconds: String(elapsedSec),
       data_dir: dataDir,
       files_total: String(totalFiles),

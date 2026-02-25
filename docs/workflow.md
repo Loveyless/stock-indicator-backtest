@@ -6,7 +6,7 @@
 
 - 入口脚本：`src/main.js`
 - 数据目录：项目根目录下的 `stock/`（读取 `stock/*.csv`）
-- 输出：项目根目录生成 `量化分析结果+YYYYMMDDHHmmss.html`
+- 输出：项目根目录生成 `量化分析结果+YYYY_MM_DD_HH_mm_ss.html`（北京时间）
 
 ## 处理流程（逐文件）
 
