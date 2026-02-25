@@ -1,0 +1,15 @@
+{
+  "name": "stock-indicator-backtest-node",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Node.js 版：遍历股票 CSV 数据，计算技术指标信号，并统计未来 N 日涨跌幅分布/概率。",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/main.js"
+  },
+  "dependencies": {
+    "csv-parse": "6.1.0",
+    "iconv-lite": "0.7.0"
+  }
+}
+
