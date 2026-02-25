@@ -1,6 +1,6 @@
 # Report
 
-脚本结束后会在项目根目录生成报告文件：
+脚本结束后会在项目根目录生成报告文件（不同 `mode` 的报告结构不同）：
 
 - 文件名：`量化分析结果+YYYY_MM_DD_HH_mm_ss.html`（北京时间）
 - 内容：自包含 HTML，双击即可在浏览器打开
@@ -13,9 +13,10 @@
 - `elapsed_seconds`：总耗时
 - `data_dir`：数据目录（应为 `...\\stock`）
 - `files_total`：本次参与统计的文件数（应用 `--files/--limit` 后的数量）
+- `mode`：`stats` 或 `backtest`
 - `start/end`：时间过滤区间（包含边界）
-- `day_list`：未来收益的天数列表
-- `safe_rsv` / `exact_quantiles`：是否开启对应开关
+- `stats` 模式额外字段：`day_list`、`safe_rsv`、`exact_quantiles`
+- `backtest` 模式额外字段：`capital`、`execution`、`lot`、`fee_bps`、`stamp_bps`、`er_span`
 
 ## 看跌/看涨分组
 

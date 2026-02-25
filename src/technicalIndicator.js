@@ -151,4 +151,5 @@ function computeSignalKD({ lowAdj, highAdj, closeAdj }, { window = 40, span = 2,
 
 module.exports = {
   computeSignalKD,
+  ewmMeanAdjustFalseIgnoreNaFalse,
 };

@@ -24,6 +24,7 @@ Node.js 版本：遍历股票 CSV 数据，计算技术指标信号，并统计�
 
 支持参数（见 `src/main.js` 顶部注释）：
 
+- `--mode=stats|backtest`（默认 stats）
 - `--start=YYYYMMDD` / `--end=YYYYMMDD`
 - `--days=1,2,3,5,10,20`
 - `--files=sz000001.csv,sh600000.csv`
@@ -32,6 +33,15 @@ Node.js 版本：遍历股票 CSV 数据，计算技术指标信号，并统计�
 - `--encoding=gbk|utf8|auto`（默认 gbk；auto 仅做 BOM 级别识别后回退 gbk）
 - `--safe-rsv`
 - `--exact-quantiles`
+
+回测模式（`--mode=backtest`）额外参数：
+
+- `--capital=10000`（初始资金）
+- `--execution=close|next_close`（默认 next_close）
+- `--lot=100`（整手）
+- `--fee-bps=0`（双边佣金，单位：bp）
+- `--stamp-bps=0`（卖出印花税，单位：bp）
+- `--er-span=20`（ER 指标 EMA span）
 
 ## Data
 
@@ -42,6 +52,7 @@ Node.js 版本：遍历股票 CSV 数据，计算技术指标信号，并统计�
 ## Notes
 
 - 默认分位数是“近似值”（常量内存，更稳）；需要“精确分位数”则加 `--exact-quantiles`（更慢、更吃内存）
+- `--mode=backtest` 是“长仓回测”（默认策略 ER）。多文件仅输出逐文件汇总，不输出“组合资金曲线”（否则必须先定义仓位/选股/并发持仓规则）。
 
 ## Docs
 

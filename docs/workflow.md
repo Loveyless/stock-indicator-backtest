@@ -1,12 +1,16 @@
 # Workflow
 
-本文档描述 `src/main.js` 的端到端处理流程（从读取 CSV 到生成 HTML 报告）。
+本文档描述 `src/main.js` 在 `--mode=stats` 下的端到端处理流程（从读取 CSV 到生成 HTML 报告）。
 
 ## 入口与目录约定
 
 - 入口脚本：`src/main.js`
 - 数据目录：项目根目录下的 `stock/`（读取 `stock/*.csv`）
 - 输出：项目根目录生成 `量化分析结果+YYYY_MM_DD_HH_mm_ss.html`（北京时间）
+
+补充：
+
+- `--mode=backtest`：走“长仓回测”流程（默认策略 ER），报告结构与 stats 不同；见 `README.md` 参数说明。
 
 ## 处理流程（逐文件）
 

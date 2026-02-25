@@ -27,11 +27,14 @@ const iconv = require('iconv-lite');
 const { parse } = require('csv-parse/sync');
 const { computeSignalKD } = require('./technicalIndicator');
 const { DescribeAccumulator } = require('./stats');
+const { computeSignalsErLongOnly } = require('./strategyEr');
+const { simulateLongOnly } = require('./backtest');
 
 const DEFAULT_DAY_LIST = [1, 2, 3, 5, 10, 20];
 const DEFAULT_START_TIME = '20070101';
 const DEFAULT_END_TIME = '20220930';
 const DEFAULT_ENCODING = 'gbk';
+const DEFAULT_MODE = 'stats'; // stats | backtest
 
 function parseBool(s) {
   if (s === undefined || s === null) return false;
@@ -50,6 +53,7 @@ function getNpmConfig(key) {
 
 function parseArgs(argv) {
   const args = {
+    mode: DEFAULT_MODE,
     start: DEFAULT_START_TIME,
     end: DEFAULT_END_TIME,
     days: DEFAULT_DAY_LIST.slice(),
@@ -59,12 +63,21 @@ function parseArgs(argv) {
     encoding: DEFAULT_ENCODING,
     safeRsv: false,
     exactQuantiles: false,
+
+    // backtest only
+    capital: 10000,
+    execution: 'next_close', // close | next_close
+    lot: 100,
+    feeBps: 0,
+    stampBps: 0,
+    erSpan: 20,
   };
 
   for (const raw of argv) {
     if (raw === '--quiet') args.quiet = true;
     else if (raw === '--safe-rsv') args.safeRsv = true;
     else if (raw === '--exact-quantiles') args.exactQuantiles = true;
+    else if (raw.startsWith('--mode=')) args.mode = raw.slice('--mode='.length).trim();
     else if (raw.startsWith('--start=')) args.start = raw.slice('--start='.length);
     else if (raw.startsWith('--end=')) args.end = raw.slice('--end='.length);
     else if (raw.startsWith('--days=')) {
@@ -87,6 +100,28 @@ function parseArgs(argv) {
       const enc = raw.slice('--encoding='.length).trim();
       if (!enc) throw new Error(`--encoding 不能为空：${raw}`);
       args.encoding = enc;
+    } else if (raw.startsWith('--capital=')) {
+      const x = Number(raw.slice('--capital='.length));
+      if (!Number.isFinite(x) || x <= 0) throw new Error(`--capital 必须是正数：${raw}`);
+      args.capital = x;
+    } else if (raw.startsWith('--execution=')) {
+      args.execution = raw.slice('--execution='.length).trim();
+    } else if (raw.startsWith('--lot=')) {
+      const x = Number(raw.slice('--lot='.length));
+      if (!Number.isFinite(x) || x <= 0) throw new Error(`--lot 必须是正数：${raw}`);
+      args.lot = Math.floor(x);
+    } else if (raw.startsWith('--fee-bps=')) {
+      const x = Number(raw.slice('--fee-bps='.length));
+      if (!Number.isFinite(x) || x < 0) throw new Error(`--fee-bps 必须是非负数：${raw}`);
+      args.feeBps = x;
+    } else if (raw.startsWith('--stamp-bps=')) {
+      const x = Number(raw.slice('--stamp-bps='.length));
+      if (!Number.isFinite(x) || x < 0) throw new Error(`--stamp-bps 必须是非负数：${raw}`);
+      args.stampBps = x;
+    } else if (raw.startsWith('--er-span=')) {
+      const x = Number(raw.slice('--er-span='.length));
+      if (!Number.isFinite(x) || x <= 0) throw new Error(`--er-span 必须是正数：${raw}`);
+      args.erSpan = Math.floor(x);
     } else if (raw.startsWith('--limit=')) {
       const n = Number(raw.slice('--limit='.length));
       if (!Number.isFinite(n) || n <= 0) throw new Error(`--limit 必须是正数：${raw}`);
@@ -97,6 +132,7 @@ function parseArgs(argv) {
   }
 
   // === npm_config_* fallback（当 npm 没把参数透传到 argv 时仍可生效）
+  if (args.mode === DEFAULT_MODE && getNpmConfig('mode')) args.mode = String(getNpmConfig('mode')).trim() || DEFAULT_MODE;
   if (args.start === DEFAULT_START_TIME && getNpmConfig('start')) args.start = String(getNpmConfig('start'));
   if (args.end === DEFAULT_END_TIME && getNpmConfig('end')) args.end = String(getNpmConfig('end'));
 
@@ -129,6 +165,28 @@ function parseArgs(argv) {
   if (!args.quiet && parseBool(getNpmConfig('quiet'))) args.quiet = true;
   if (!args.safeRsv && (parseBool(getNpmConfig('safe_rsv')) || parseBool(getNpmConfig('safe-rsv')))) args.safeRsv = true;
   if (!args.exactQuantiles && (parseBool(getNpmConfig('exact_quantiles')) || parseBool(getNpmConfig('exact-quantiles')))) args.exactQuantiles = true;
+
+  if (args.capital === 10000 && getNpmConfig('capital')) {
+    const x = Number(getNpmConfig('capital'));
+    if (Number.isFinite(x) && x > 0) args.capital = x;
+  }
+  if (args.execution === 'next_close' && getNpmConfig('execution')) args.execution = String(getNpmConfig('execution')).trim() || args.execution;
+  if (args.lot === 100 && getNpmConfig('lot')) {
+    const x = Number(getNpmConfig('lot'));
+    if (Number.isFinite(x) && x > 0) args.lot = Math.floor(x);
+  }
+  if (args.feeBps === 0 && getNpmConfig('fee_bps')) {
+    const x = Number(getNpmConfig('fee_bps'));
+    if (Number.isFinite(x) && x >= 0) args.feeBps = x;
+  }
+  if (args.stampBps === 0 && getNpmConfig('stamp_bps')) {
+    const x = Number(getNpmConfig('stamp_bps'));
+    if (Number.isFinite(x) && x >= 0) args.stampBps = x;
+  }
+  if (args.erSpan === 20 && getNpmConfig('er_span')) {
+    const x = Number(getNpmConfig('er_span'));
+    if (Number.isFinite(x) && x > 0) args.erSpan = Math.floor(x);
+  }
 
   return args;
 }
@@ -202,6 +260,12 @@ function formatInt(x) {
 
 function pad2(n) {
   return String(n).padStart(2, '0');
+}
+
+function formatYmd(ymd) {
+  const s = String(ymd);
+  if (!/^\d{8}$/.test(s)) return s;
+  return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
 }
 
 function getBeijingDateTimeParts(d) {
@@ -349,6 +413,46 @@ function renderProbabilityTableHtml(dayList, bucket, snapByDay, { directionText,
   return `<table class="table">${head}${body}</table>`;
 }
 
+function downsampleSeries(series, maxPoints) {
+  if (series.length <= maxPoints) return series;
+  const step = Math.ceil(series.length / maxPoints);
+  const out = [];
+  for (let i = 0; i < series.length; i += step) out.push(series[i]);
+  // 确保最后一个点被保留
+  const last = series[series.length - 1];
+  if (out[out.length - 1] !== last) out.push(last);
+  return out;
+}
+
+function renderEquityCurveSvg(equityCurve) {
+  const pts = downsampleSeries(equityCurve, 900);
+  const values = pts.map((p) => p.equity).filter((x) => Number.isFinite(x));
+  if (!values.length) return '<div class="hint">无净值数据</div>';
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const w = 1080;
+  const h = 240;
+  const pad = 8;
+  const range = max - min || 1;
+
+  const toX = (idx) => pad + (idx * (w - pad * 2)) / Math.max(1, pts.length - 1);
+  const toY = (v) => pad + (h - pad * 2) * (1 - (v - min) / range);
+
+  const points = pts.map((p, idx) => {
+    const v = Number.isFinite(p.equity) ? p.equity : min;
+    return `${toX(idx).toFixed(2)},${toY(v).toFixed(2)}`;
+  }).join(' ');
+
+  const last = pts[pts.length - 1];
+  return `
+    <div class="hint">区间：${htmlEscape(formatYmd(pts[0].date))} → ${htmlEscape(formatYmd(last.date))}；末值：${htmlEscape(formatNum(last.equity))}</div>
+    <svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" role="img" aria-label="equity curve">
+      <rect x="0" y="0" width="${w}" height="${h}" fill="rgba(255,255,255,0.02)"></rect>
+      <polyline fill="none" stroke="var(--accent)" stroke-width="2" points="${points}"></polyline>
+    </svg>
+  `;
+}
+
 function renderReportHtml({ title, meta, resultsBySignal, notes }) {
   const metaRows = Object.entries(meta)
     .map(([k, v]) => `<tr><th>${htmlEscape(k)}</th><td>${htmlEscape(v)}</td></tr>`)
@@ -423,6 +527,105 @@ function renderReportHtml({ title, meta, resultsBySignal, notes }) {
 </html>`;
 }
 
+function renderBacktestReportHtml({ title, meta, strategy, summary, perFileRows, equityCurveSvg, notes }) {
+  const metaRows = Object.entries(meta)
+    .map(([k, v]) => `<tr><th>${htmlEscape(k)}</th><td>${htmlEscape(v)}</td></tr>`)
+    .join('');
+
+  const summaryRows = Object.entries(summary)
+    .map(([k, v]) => `<tr><th>${htmlEscape(k)}</th><td>${htmlEscape(v)}</td></tr>`)
+    .join('');
+
+  const perFileHead = `
+    <thead>
+      <tr>
+        <th>file</th>
+        <th class="num">trades</th>
+        <th class="num">win_rate</th>
+        <th class="num">total_return</th>
+        <th class="num">max_dd</th>
+        <th class="num">final_equity</th>
+      </tr>
+    </thead>`;
+
+  const perFileBody = `
+    <tbody>
+      ${perFileRows.map((r) => `
+        <tr>
+          <td>${htmlEscape(r.file)}</td>
+          <td class="num">${htmlEscape(formatInt(r.trades))}</td>
+          <td class="num">${htmlEscape(Number.isFinite(r.winRate) ? (r.winRate * 100).toFixed(2) + '%' : 'NaN')}</td>
+          <td class="num">${htmlEscape(Number.isFinite(r.totalReturn) ? (r.totalReturn * 100).toFixed(2) + '%' : 'NaN')}</td>
+          <td class="num">${htmlEscape(Number.isFinite(r.maxDrawdown) ? (r.maxDrawdown * 100).toFixed(2) + '%' : 'NaN')}</td>
+          <td class="num">${htmlEscape(Number.isFinite(r.finalEquity) ? formatNum(r.finalEquity) : 'NaN')}</td>
+        </tr>
+      `).join('')}
+    </tbody>`;
+
+  return `<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${htmlEscape(title)}</title>
+    <style>
+      :root { --bg:#0b0f17; --card:#121a27; --muted:#9fb0c2; --text:#e7eef7; --line:#223046; --accent:#6aa9ff; }
+      body { margin:0; background:var(--bg); color:var(--text); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "PingFang SC", "Microsoft YaHei", sans-serif; }
+      .wrap { max-width: 1200px; margin: 24px auto; padding: 0 16px; }
+      header { margin-bottom: 16px; }
+      h1 { font-size: 22px; margin: 0 0 8px; }
+      .sub { color: var(--muted); font-size: 13px; }
+      .grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+      .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+      .hint { color: var(--muted); font-size: 13px; margin: 6px 0 12px; }
+      h2 { margin: 0 0 8px; font-size: 18px; }
+      h3 { margin: 14px 0 8px; font-size: 14px; color: var(--accent); }
+      table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+      th, td { border: 1px solid var(--line); padding: 8px; font-size: 12px; }
+      th { background: rgba(255,255,255,0.03); text-align: left; }
+      td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+      .table { overflow: auto; display: block; }
+      .meta { width: 100%; max-width: 900px; }
+      .meta th { width: 240px; }
+      .notes { white-space: pre-wrap; color: var(--muted); font-size: 12px; line-height: 1.5; }
+      details > summary { cursor: pointer; color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>${htmlEscape(title)}</h1>
+        <div class="sub">${htmlEscape(strategy)}</div>
+      </header>
+
+      <section class="card">
+        <h2>Run Meta</h2>
+        <table class="meta"><tbody>${metaRows}</tbody></table>
+      </section>
+
+      <div class="grid">
+        <section class="card">
+          <h2>Strategy Summary</h2>
+          <table class="meta"><tbody>${summaryRows}</tbody></table>
+        </section>
+
+        <section class="card">
+          <h2>Per File</h2>
+          <div class="hint">说明：A 股长仓回测；多文件情况下不生成“组合资金曲线”，避免凭空假设仓位分配。</div>
+          <table class="table">${perFileHead}${perFileBody}</table>
+          ${equityCurveSvg ? `<details><summary>Equity Curve</summary>${equityCurveSvg}</details>` : '<div class="hint">提示：要看单只股票的资金曲线，请用 `--files=xxx.csv` 限定单文件。</div>'}
+        </section>
+
+        <section class="card">
+          <h2>Notes</h2>
+          <div class="notes">${htmlEscape(notes)}</div>
+        </section>
+      </div>
+    </div>
+  </body>
+</html>`;
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
 
@@ -446,6 +649,153 @@ function main() {
   if (args.limit) fileList = fileList.slice(0, args.limit);
 
   const startedAt = Date.now();
+
+  if (args.mode !== 'stats' && args.mode !== 'backtest') {
+    throw new Error(`--mode 仅支持 stats/backtest：${args.mode}`);
+  }
+
+  if (args.mode === 'backtest' && args.days.join(',') !== DEFAULT_DAY_LIST.join(',')) {
+    // backtest 模式不使用 --days，避免误解（回测持有期/止盈止损并未定义）。
+    // 允许用户仍然传入，但强制提示更清晰。
+  }
+
+  if (args.mode === 'backtest') {
+    const perFile = [];
+
+    const totalFiles = fileList.length;
+    let processedFiles = 0;
+
+    for (const f of fileList) {
+      processedFiles += 1;
+      if (!args.quiet) renderProgress(processedFiles, totalFiles, startedAt);
+
+      const fullPath = path.join(dataDir, f);
+      const buf = fs.readFileSync(fullPath);
+      const text = decodeCsvBuffer(buf, args.encoding);
+
+      const records = parse(text, {
+        columns: true,
+        skip_empty_lines: true,
+        trim: true,
+        relax_column_count: true,
+      });
+
+      if (!records.length) continue;
+      for (const col of ['交易日期', '最低价_复权', '最高价_复权', '收盘价_复权']) {
+        if (!(col in records[0])) {
+          throw new Error(`文件 ${f} 缺少必要列：${col}（encoding=${args.encoding}；若列名乱码，尝试 --encoding=auto 或 --encoding=utf8）`);
+        }
+      }
+
+      const n = records.length;
+      const dates = new Array(n);
+      const lowAdj = new Array(n);
+      const highAdj = new Array(n);
+      const closeAdj = new Array(n);
+
+      for (let i = 0; i < n; i += 1) {
+        const r = records[i];
+        dates[i] = parseYmdInt(r['交易日期']);
+        lowAdj[i] = parseNumber(r['最低价_复权']);
+        highAdj[i] = parseNumber(r['最高价_复权']);
+        closeAdj[i] = parseNumber(r['收盘价_复权']);
+      }
+
+      const { entry, exit } = computeSignalsErLongOnly({ highAdj, lowAdj, closeAdj }, { span: args.erSpan });
+      const r = simulateLongOnly(
+        { datesYmd: dates, closeAdj, entrySignal: entry, exitSignal: exit },
+        {
+          startYmd,
+          endYmd,
+          initialCapital: args.capital,
+          execution: args.execution,
+          lot: args.lot,
+          feeBps: args.feeBps,
+          stampBps: args.stampBps,
+          forceExitEof: true,
+        },
+      );
+
+      perFile.push({
+        file: f,
+        trades: r.trades.length,
+        wins: r.trades.filter((t) => Number.isFinite(t.pnl) && t.pnl > 0).length,
+        winRate: r.winRate,
+        totalReturn: r.totalReturn,
+        maxDrawdown: r.maxDrawdown,
+        finalEquity: r.finalEquity,
+        equityCurve: r.equityCurve,
+      });
+    }
+
+    if (!args.quiet) process.stdout.write('\n');
+
+    // 结论优先：按总收益排序
+    perFile.sort((a, b) => {
+      const ar = Number.isFinite(a.totalReturn) ? a.totalReturn : Number.NEGATIVE_INFINITY;
+      const br = Number.isFinite(b.totalReturn) ? b.totalReturn : Number.NEGATIVE_INFINITY;
+      return br - ar;
+    });
+
+    const totalTrades = perFile.reduce((s, x) => s + x.trades, 0);
+    const winTrades = perFile.reduce((s, x) => s + x.wins, 0);
+    const pooledWinRate = totalTrades ? winTrades / totalTrades : Number.NaN;
+    const avgReturn = perFile.length
+      ? perFile.reduce((s, x) => s + (Number.isFinite(x.totalReturn) ? x.totalReturn : 0), 0) / perFile.length
+      : Number.NaN;
+
+    const now = new Date();
+    const ts = timestampBeijingYmdHmsUnderscore(now);
+    const reportName = `量化分析结果+${ts}.html`;
+    const reportPath = path.join(projectRoot, reportName);
+
+    const singleEquity = args.files && args.files.length === 1 ? perFile.find((x) => x.file === args.files[0]) : null;
+    const equityCurveSvg = singleEquity && singleEquity.equityCurve.length ? renderEquityCurveSvg(singleEquity.equityCurve) : '';
+
+    const elapsedSec = Math.round((Date.now() - startedAt) / 1000);
+    const notes = [
+      `- 默认策略：ER（Elder Ray）。BullPower=HIGH-EMA(CLOSE,N)，BearPower=LOW-EMA(CLOSE,N)。`,
+      `- 入场：BearPower 上穿 0；出场：BullPower 下穿 0（长仓）。`,
+      `- 执行价：${args.execution}（为避免“收盘生成信号又用同一收盘成交”的偷看，默认 next_close）。`,
+      `- 股数：按 lot=${args.lot} 整手交易；资金不足则跳过该次入场。`,
+      `- 手续费：fee_bps=${args.feeBps}；印花税（卖出）：stamp_bps=${args.stampBps}。`,
+      `- 多文件只做“逐文件回测 + 汇总表”，不做组合净值曲线（否则必须先定义仓位分配/并发持仓/选股规则）。`,
+    ].join('\n');
+
+    const html = renderBacktestReportHtml({
+      title: `量化分析结果+${ts}`,
+      meta: {
+        generated_at: formatBeijingGeneratedAt(now),
+        elapsed_seconds: String(elapsedSec),
+        data_dir: dataDir,
+        files_total: String(perFile.length),
+        encoding: String(args.encoding),
+        mode: 'backtest',
+        start: args.start,
+        end: args.end,
+        capital: String(args.capital),
+        execution: String(args.execution),
+        lot: String(args.lot),
+        fee_bps: String(args.feeBps),
+        stamp_bps: String(args.stampBps),
+        er_span: String(args.erSpan),
+      },
+      strategy: '默认策略（ER）：仅做多。入场 BearPower 上穿 0；出场 BullPower 下穿 0；EMA(CLOSE, N)。',
+      summary: {
+        files: String(perFile.length),
+        trades_total: String(totalTrades),
+        win_rate_pooled: Number.isFinite(pooledWinRate) ? (pooledWinRate * 100).toFixed(2) + '%' : 'NaN',
+        avg_total_return_per_file: Number.isFinite(avgReturn) ? (avgReturn * 100).toFixed(2) + '%' : 'NaN',
+      },
+      perFileRows: perFile.slice(0, 200),
+      equityCurveSvg: equityCurveSvg || null,
+      notes,
+    });
+
+    fs.writeFileSync(reportPath, html, 'utf8');
+    console.log(`已生成报告：${reportPath}`);
+    return;
+  }
 
   const signalBuckets = new Map([
     [0, { totalRows: 0, probCountByDay: new Map(), describeByDay: {} }],
