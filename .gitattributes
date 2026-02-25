@@ -1,2 +1,5 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Auto detect text files and normalize to LF in repo/checkout
+* text=auto eol=lf
+
+# Explicit binaries (never touch line endings)
+*.zip binary
