@@ -18,7 +18,7 @@
 - `stats` 模式额外字段：`day_list`、`safe_rsv`、`exact_quantiles`
 - `backtest` 模式额外字段：`capital`、`execution`、`lot`、`fee_bps`、`stamp_bps`、`er_span`
 
-## 看跌/看涨分组
+## stats 模式：看跌/看涨分组
 
 每个分组对应 `signal`：
 
@@ -50,4 +50,28 @@
 
 - `signal_rows` 包含“未来 N 日收益无法计算（NaN）”的样本点；
 - 这是为了与原 Python 版的概率口径保持一致，因此 `hit_rate` 与 `valid_return_rows/signal_rows` 之间可能存在差异。
+
+## backtest 模式：组合回测报告
+
+backtest 报告的目标是“结论优先”，核心是 Strategy Summary 与组合资金曲线。
+
+### Strategy Summary
+
+常见字段含义：
+
+- `portfolio_final_equity`：组合期末资金
+- `portfolio_total_return`：组合区间总收益率
+- `portfolio_max_dd`：组合区间最大回撤
+- `portfolio_trades`：组合交易次数
+- `portfolio_win_rate`：组合胜率（按每笔交易 `pnl>0` 计胜）
+
+### Per File
+
+逐文件（逐股票）汇总表字段：
+
+- `trades`：该文件交易次数
+- `win_rate`：该文件胜率
+- `total_return`：该文件总收益率（按该文件独立用同一初始资金回测）
+- `max_dd`：该文件最大回撤
+- `final_equity`：该文件期末资金
 

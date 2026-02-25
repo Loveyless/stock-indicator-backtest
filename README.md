@@ -2,7 +2,10 @@
 
 Node.js 版本：遍历股票 CSV 数据，计算技术指标信号，并统计未来 N 日涨跌幅分布/概率。
 
-这不是“资金曲线回测引擎”。它输出的是：**信号出现时点的条件统计报告**（describe + 命中率）。
+本项目支持两种输出：
+
+- `--mode=stats`：**信号出现时点**的条件统计报告（describe + 命中率）
+- `--mode=backtest`：默认策略（ER，长仓）做“组合回测”，输出组合资金曲线与最大回撤等结论
 
 ## Quick Start
 
@@ -63,3 +66,4 @@ Node.js 版本：遍历股票 CSV 数据，计算技术指标信号，并统计�
 - 端到端流程：`docs/workflow.md`
 - 数据契约与约束：`docs/data-contract.md`
 - 报告字段说明：`docs/report.md`
+- 指标参考（来源资料）：`docs/references/`
