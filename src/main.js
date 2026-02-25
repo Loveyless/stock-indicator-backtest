@@ -2,23 +2,33 @@
  * Node.js 入口脚本
  *
  * 做的事：
- * 1) 遍历 `stock/*.csv`（默认 GBK，可用 --encoding 指定）
- * 2) 计算技术指标信号（KD 金叉/死叉）
- * 3) 计算未来 N 日涨跌幅，并按 signal 分组输出统计与概率
+ * - `--mode=stats`：遍历 `stock/*.csv`，计算信号日后 N 日收益的条件统计（describe + 命中率）
+ * - `--mode=backtest`：用默认策略（ER，长仓）做逐文件回测，并输出收益/回撤等结论
  *
  * 运行：
  * - `npm i`
  * - `npm start`
  *
  * 可选参数：
+ * - `--mode=stats|backtest`（默认 stats）
  * - `--start=20070101` / `--end=20220930`
  * - `--days=1,2,3,5,10,20`
  * - `--files=sz000001.csv,sh600000.csv`（只跑指定文件）
  * - `--limit=10`（只跑前 N 个文件）
  * - `--quiet`（不显示进度，仅输出报告路径）
  * - `--encoding=gbk|utf8|auto`（默认 gbk；auto 仅做 BOM 级别识别后回退 gbk）
+ *
+ * stats 模式参数：
  * - `--safe-rsv`（更稳：HIGH_N==LOW_N 时不产生 inf/NaN；注意会改变信号/结果）
  * - `--exact-quantiles`（精确分位数：更慢、更吃内存）
+ *
+ * backtest 模式参数（默认策略 ER）：
+ * - `--capital=10000`
+ * - `--execution=close|next_close`（默认 next_close）
+ * - `--lot=100`
+ * - `--fee-bps=0`（双边佣金）
+ * - `--stamp-bps=0`（卖出印花税）
+ * - `--er-span=20`（EMA span）
  */
 
 const fs = require('node:fs');
