@@ -152,22 +152,30 @@ class P2Quantile {
 class ExactQuantilesBuffer {
   constructor() {
     this._values = [];
+    this._sorted = true;
   }
 
   add(x) {
     if (!Number.isFinite(x)) return;
     this._values.push(x);
+    this._sorted = false;
+  }
+
+  _ensureSorted() {
+    if (this._sorted) return;
+    this._values.sort((a, b) => a - b);
+    this._sorted = true;
   }
 
   snapshot() {
     if (this._values.length === 0) {
       return { q25: Number.NaN, q50: Number.NaN, q75: Number.NaN };
     }
-    const sorted = this._values.slice().sort((a, b) => a - b);
+    this._ensureSorted();
     return {
-      q25: quantileSorted(sorted, 0.25),
-      q50: quantileSorted(sorted, 0.5),
-      q75: quantileSorted(sorted, 0.75),
+      q25: quantileSorted(this._values, 0.25),
+      q50: quantileSorted(this._values, 0.5),
+      q75: quantileSorted(this._values, 0.75),
     };
   }
 }

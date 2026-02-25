@@ -306,7 +306,7 @@ function renderDescribeTableHtml(dayList, snapByDay) {
   return `<table class="table">${head}${body}</table>`;
 }
 
-function renderProbabilityTableHtml(dayList, bucket, { directionText, compareSign }) {
+function renderProbabilityTableHtml(dayList, bucket, snapByDay, { directionText, compareSign }) {
   const rows = dayList.map((day) => {
     const hit = bucket.probCountByDay.get(day) || 0;
     const den = bucket.totalRows || 0;
@@ -316,7 +316,7 @@ function renderProbabilityTableHtml(dayList, bucket, { directionText, compareSig
       hit,
       den,
       p,
-      valid: bucket.describeByDay[day].snapshot().count,
+      valid: snapByDay[day].count,
     };
   });
 
@@ -554,7 +554,7 @@ function main() {
     const bucket = signalBuckets.get(sig);
     const snapByDay = collectDescribeSnapshots(args.days, bucket.describeByDay);
     const describeTableHtml = renderDescribeTableHtml(args.days, snapByDay);
-    const probTableHtml = renderProbabilityTableHtml(args.days, bucket, sig === 1
+    const probTableHtml = renderProbabilityTableHtml(args.days, bucket, snapByDay, sig === 1
       ? { directionText: 'bullish', compareSign: '>' }
       : { directionText: 'bearish', compareSign: '<' });
 
