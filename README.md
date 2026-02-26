@@ -1,10 +1,18 @@
-# stock-indicator-backtest-node
+<p align="center">
+  <img src="./logo.svg" width="96" alt="Logo" />
+</p>
 
-Node.js 版本：A 股“周期轮动”策略回测引擎。
+<h1 align="center">stock-indicator-backtest</h1>
 
-一句话：你写一个 `strategy.js`（选股逻辑），我帮你按 `D/W/M/Q` 周期自动做“买入→卖出→循环”，并生成一份可视化报告（资金曲线/回撤/胜率等）。
+<p align="center">
+  A 股周期轮动回测：写 <code>strategy.js</code> → 自动回测（D/W/M/Q）→ 生成可视化报告（资金曲线/回撤/胜率等）
+</p>
 
-本项目只保留回测输出（已移除统计(stats)报告逻辑）。
+<p align="center">
+  <a href="#quick-start">Quick Start</a> ·
+  <a href="#写策略strategyjs">写策略</a> ·
+  <a href="./STRATEGY.md">STRATEGY 文档</a>
+</p>
 
 ## 这仓库做什么 / 不做什么
 
@@ -106,11 +114,6 @@ Node.js 版本：A 股“周期轮动”策略回测引擎。
   - 必须列：`股票名称`、`交易日期`、`收盘价_复权`
 - 为了避免把大量数据误提交进 git，`stock/` 已在 `.gitignore` 里默认忽略
 - 全量数据建议通过 GitHub Release 附件分发：见 `docs/data.md`（手动下载/校验/解压）
-
-## Notes
-
-- `--mode=backtest` 是“周期轮动长仓回测”：按 `freq` 切周期→每期选股→均仓买入→期末全卖→循环往复。
-- 当前撮合口径是“理想化成交”（先把策略跑通）：不限制整手/最小成交单位、不模拟涨跌停/停牌导致的成交失败；缺价标的会整期跳过。详见 `STRATEGY_API.md`。
 
 ## Docs
 

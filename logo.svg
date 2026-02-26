@@ -1,0 +1,17 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="stock-indicator-backtest logo">
+  <defs>
+    <linearGradient id="bg" x1="32" y1="32" x2="224" y2="224" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#06B6D4"/>
+    </linearGradient>
+  </defs>
+  <rect x="24" y="24" width="208" height="208" rx="52" fill="url(#bg)"/>
+  <path d="M64 168L98 134L128 150L162 106L192 120" stroke="white" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M192 120L192 92" stroke="white" stroke-width="14" stroke-linecap="round"/>
+  <path d="M192 92L210 110" stroke="white" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M192 92L174 110" stroke="white" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M72 96V140" stroke="rgba(255,255,255,0.85)" stroke-width="10" stroke-linecap="round"/>
+  <path d="M88 84V152" stroke="rgba(255,255,255,0.85)" stroke-width="10" stroke-linecap="round"/>
+  <path d="M104 104V132" stroke="rgba(255,255,255,0.85)" stroke-width="10" stroke-linecap="round"/>
+</svg>
+

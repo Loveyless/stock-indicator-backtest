@@ -3,3 +3,4 @@ stock/
 stock.zip
 量化分析结果+*.html
 .DS_Store
+table['开盘价']
