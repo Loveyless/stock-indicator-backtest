@@ -2,6 +2,8 @@
   <img src="./logo.svg" width="96" alt="Logo" />
 </p>
 
+<h2 align="center">股票量化助手</h2>
+
 <h1 align="center">stock-indicator-backtest</h1>
 
 <p align="center">
@@ -12,6 +14,12 @@
   <a href="#quick-start">Quick Start</a> ·
   <a href="#写策略strategyjs">写策略</a> ·
   <a href="./STRATEGY.md">STRATEGY 文档</a>
+</p>
+
+## 预览
+
+<p>
+  <img src="./preview.png" alt="量化报告预览" />
 </p>
 
 ## 这仓库做什么 / 不做什么
