@@ -32,6 +32,8 @@ Node.js 版本：遍历股票 CSV 数据，计算技术指标信号，并统计�
 支持参数（见 `src/main.js` 顶部注释）：
 
 - `--mode=stats|backtest`（默认 stats）
+- `--data-dir=PATH`（数据目录，默认 `./stock`）
+- `--data-version=STRING`（可选：写进报告 Run Meta，方便复现）
 - `--start=YYYYMMDD` / `--end=YYYYMMDD`
 - `--days=1,2,3,5,10,20`
 - `--files=sz000001.csv,sh600000.csv`
@@ -55,6 +57,7 @@ Node.js 版本：遍历股票 CSV 数据，计算技术指标信号，并统计�
 - 数据目录：`stock/`
 - CSV 默认按 `GBK` 解码（可用 `--encoding` 指定），必须包含列：`交易日期`、`最低价_复权`、`最高价_复权`、`收盘价_复权`
 - 为了避免把大量数据误提交进 git，`stock/` 已在 `.gitignore` 里默认忽略
+- 全量数据建议通过 GitHub Release 附件分发：见 `docs/data.md`；可用 `scripts/fetch_data.ps1` 一键下载/校验/解压
 
 ## Notes
 
@@ -65,5 +68,6 @@ Node.js 版本：遍历股票 CSV 数据，计算技术指标信号，并统计�
 
 - 端到端流程：`docs/workflow.md`
 - 数据契约与约束：`docs/data-contract.md`
+- 数据下载与校验：`docs/data.md`
 - 报告字段说明：`docs/report.md`
 - 指标参考（来源资料）：`docs/references/`

@@ -13,6 +13,7 @@
 - `elapsed_seconds`：总耗时
 - `data_dir`：数据目录（应为 `...\\stock`）
 - `files_total`：本次参与统计的文件数（应用 `--files/--limit` 后的数量）
+- `data_version`：可选数据版本标识（如果传了 `--data-version`）
 - `mode`：`stats` 或 `backtest`
 - `start/end`：时间过滤区间（包含边界）
 - `stats` 模式额外字段：`day_list`、`safe_rsv`、`exact_quantiles`
