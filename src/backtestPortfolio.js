@@ -1,4 +1,5 @@
 const { computeMaxDrawdown } = require('./backtest');
+const { indexOfDate } = require('./seriesUtils');
 
 function shouldReplaceLastPoint(curve, date) {
   return curve.length && curve[curve.length - 1].date === date;
@@ -338,8 +339,6 @@ function simulatePortfolioEqualWeight({
   }
 
   flushUpdatesBefore(endYmd + 1);
-  // 末尾再记一次 endYmd 的权益（可能最后一个点 < endYmd）
-  if (equityCurve.length) pushEquityPoint(equityCurve, endYmd, cash + totalMarketValue);
 
   const finalEquity = cash + totalMarketValue;
   const totalReturn = finalEquity / initialCapital - 1;
@@ -362,8 +361,213 @@ function simulatePortfolioEqualWeight({
   };
 }
 
+function isFinitePrice(x) {
+  return Number.isFinite(x) && x > 0;
+}
+
+function simulatePortfolioPeriodicIdeal({
+  seriesByFile,
+  marketDatesAsc,
+  periodPlans,
+}, {
+  startYmd,
+  endYmd,
+  initialCapital = 1000000,
+  feeBps = 0,
+  stampBps = 0,
+} = {}) {
+  if (!Number.isFinite(startYmd) || !Number.isFinite(endYmd)) throw new Error('startYmd/endYmd 必须是数字 YYYYMMDD');
+  if (!Number.isFinite(initialCapital) || initialCapital <= 0) throw new Error(`initialCapital 必须是正数：${initialCapital}`);
+  if (!Number.isFinite(feeBps) || feeBps < 0) throw new Error(`feeBps 必须是非负数：${feeBps}`);
+  if (!Number.isFinite(stampBps) || stampBps < 0) throw new Error(`stampBps 必须是非负数：${stampBps}`);
+
+  const feeRate = feeBps / 10000;
+  const stampRate = stampBps / 10000;
+
+  const marketDates = (Array.isArray(marketDatesAsc) ? marketDatesAsc : [])
+    .filter((d) => Number.isFinite(d) && d >= startYmd && d <= endYmd)
+    .slice()
+    .sort((a, b) => a - b);
+
+  const buyPlanByDate = new Map(); // ymd -> plan
+  const sellPlansByDate = new Map(); // ymd -> [plan]
+  for (const p of (Array.isArray(periodPlans) ? periodPlans : [])) {
+    if (!p || !Number.isFinite(p.buyYmd) || !Number.isFinite(p.sellYmd)) continue;
+    if (p.buyYmd < startYmd || p.sellYmd > endYmd) continue;
+    if (p.buyYmd >= p.sellYmd) continue;
+    buyPlanByDate.set(p.buyYmd, p);
+    if (!sellPlansByDate.has(p.sellYmd)) sellPlansByDate.set(p.sellYmd, []);
+    sellPlansByDate.get(p.sellYmd).push(p);
+  }
+
+  let cash = initialCapital;
+  const positions = new Map(); // file -> { shares, lastPrice, idx, nextIdx, entry: { date, price, cost, periodKey } }
+  const trades = [];
+  const equityCurve = [];
+  let totalMarketValue = 0;
+
+  const heap = new MinHeap(); // { date, file }
+
+  const pushNextIfAny = (file) => {
+    const pos = positions.get(file);
+    if (!pos) return;
+    const s = seriesByFile.get(file);
+    if (!s) return;
+    const { datesYmd } = s;
+    const ni = pos.nextIdx;
+    if (ni >= 0 && ni < datesYmd.length) {
+      const nd = datesYmd[ni];
+      if (Number.isFinite(nd) && nd <= endYmd) heap.push({ date: nd, file });
+    }
+  };
+
+  const applyPriceUpdateAt = (dateInclusive) => {
+    while (heap.size() && heap.peek().date === dateInclusive) {
+      const { file } = heap.pop();
+      const pos = positions.get(file);
+      const s = seriesByFile.get(file);
+      if (!pos || !s) continue;
+      const idx = pos.nextIdx;
+      if (idx < 0 || idx >= s.datesYmd.length) continue;
+      if (s.datesYmd[idx] !== dateInclusive) continue;
+
+      const px = s.closeAdj[idx];
+      if (isFinitePrice(px)) {
+        totalMarketValue += pos.shares * (px - pos.lastPrice);
+        pos.lastPrice = px;
+      }
+      pos.idx = idx;
+      pos.nextIdx = idx + 1;
+      pushNextIfAny(file);
+    }
+  };
+
+  const sellAllAtClose = (dateYmd, reason) => {
+    if (!positions.size) return;
+    for (const [file, pos] of Array.from(positions.entries())) {
+      const px = pos.lastPrice;
+      if (!isFinitePrice(px)) {
+        positions.delete(file);
+        continue;
+      }
+
+      const gross = pos.shares * px;
+      const fee = gross * feeRate;
+      const stamp = gross * stampRate;
+      const net = gross - fee - stamp;
+      cash += net;
+      totalMarketValue -= pos.shares * px;
+
+      const pnl = net - pos.entry.cost;
+      const ret = pos.entry.cost > 0 ? pnl / pos.entry.cost : Number.NaN;
+      trades.push({
+        file,
+        periodKey: pos.entry.periodKey,
+        entryDate: pos.entry.date,
+        exitDate: dateYmd,
+        entryPrice: pos.entry.price,
+        exitPrice: px,
+        shares: pos.shares,
+        pnl,
+        ret,
+        reason,
+      });
+
+      positions.delete(file);
+    }
+  };
+
+  const buyEqualWeightAtClose = (plan) => {
+    if (!plan) return;
+    const raw = Array.isArray(plan.picks) ? plan.picks : [];
+    const picks = raw
+      .map((x) => String(x).trim())
+      .filter(Boolean);
+    if (!picks.length) return;
+
+    // 只保留“买入日与卖出日都有收盘复权价”的标的；否则整期跳过。
+    const tradable = [];
+    for (const file of picks) {
+      const s = seriesByFile.get(file);
+      if (!s) continue;
+      const buyIdx = indexOfDate(s.datesYmd, plan.buyYmd);
+      const sellIdx = indexOfDate(s.datesYmd, plan.sellYmd);
+      if (buyIdx < 0 || sellIdx < 0 || sellIdx <= buyIdx) continue;
+      const buyPx = s.closeAdj[buyIdx];
+      const sellPx = s.closeAdj[sellIdx];
+      if (!isFinitePrice(buyPx) || !isFinitePrice(sellPx)) continue;
+      tradable.push({ file, buyIdx, buyPx });
+    }
+
+    if (!tradable.length) return;
+    const budgetPer = cash / tradable.length;
+    if (!(budgetPer > 0)) return;
+
+    // 理想化：无限可分、无整手限制；把 cash 全部均分到 tradable（含买入手续费）。
+    cash = 0;
+    for (const t of tradable) {
+      // 预算包含手续费：gross + fee = budgetPer
+      const gross = feeRate > 0 ? (budgetPer / (1 + feeRate)) : budgetPer;
+      const shares = gross / t.buyPx;
+      if (!(shares > 0)) {
+        cash += budgetPer;
+        continue;
+      }
+
+      positions.set(t.file, {
+        shares,
+        lastPrice: t.buyPx,
+        idx: t.buyIdx,
+        nextIdx: t.buyIdx + 1,
+        entry: {
+          date: plan.buyYmd,
+          price: t.buyPx,
+          cost: budgetPer,
+          periodKey: String(plan.periodKey || ''),
+        },
+      });
+      totalMarketValue += shares * t.buyPx;
+      pushNextIfAny(t.file);
+    }
+  };
+
+  for (const d of marketDates) {
+    applyPriceUpdateAt(d);
+
+    if (sellPlansByDate.has(d)) {
+      sellAllAtClose(d, 'period_exit');
+    }
+
+    if (buyPlanByDate.has(d)) {
+      const plan = buyPlanByDate.get(d);
+      buyEqualWeightAtClose(plan);
+    }
+
+    pushEquityPoint(equityCurve, d, cash + totalMarketValue);
+  }
+
+  const finalEquity = cash + totalMarketValue;
+  const totalReturn = finalEquity / initialCapital - 1;
+  const winTrades = trades.filter((t) => Number.isFinite(t.pnl) && t.pnl > 0).length;
+  const winRate = trades.length ? winTrades / trades.length : Number.NaN;
+  const avgTradeRet = trades.length
+    ? trades.reduce((s, t) => s + (Number.isFinite(t.ret) ? t.ret : 0), 0) / trades.length
+    : Number.NaN;
+  const { maxDrawdown } = computeMaxDrawdown(equityCurve);
+
+  return {
+    finalEquity,
+    totalReturn,
+    maxDrawdown,
+    trades,
+    winRate,
+    avgTradeRet,
+    equityCurve,
+  };
+}
+
 module.exports = {
   buildExecutionEvents,
   simulatePortfolioEqualWeight,
+  simulatePortfolioPeriodicIdeal,
 };
-

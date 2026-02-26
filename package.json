@@ -2,11 +2,12 @@
   "name": "stock-indicator-backtest-node",
   "version": "0.1.0",
   "private": true,
-  "description": "Node.js 版：遍历股票 CSV 数据，计算技术指标信号，并统计未来 N 日涨跌幅分布/概率。",
+  "description": "Node.js 版：A 股周期轮动策略回测（周期首个交易日买入、周期最后一个交易日卖出），策略来自 strategy.js，输出组合资金曲线/回撤/胜率等。",
   "type": "commonjs",
   "scripts": {
-    "start": "node src/main.js",
-    "backtest": "node src/main.js --mode=backtest"
+    "start": "node src/main.js --mode=backtest",
+    "backtest": "node src/main.js --mode=backtest",
+    "backtest:quick": "node src/main.js --mode=backtest --start=20211115 --end=20991231 --limit=5 --quiet"
   },
   "dependencies": {
     "csv-parse": "6.1.0",

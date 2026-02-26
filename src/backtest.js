@@ -5,25 +5,56 @@ function clamp01(x) {
 }
 
 function computeMaxDrawdown(equityCurve) {
-  let peak = Number.NEGATIVE_INFINITY;
-  let maxDd = 0;
-  let maxDdFrom = null;
-  let maxDdTo = null;
+  let peakEquity = Number.NEGATIVE_INFINITY;
+  let peakDate = null;
+
+  let maxDrawdown = 0;
+  let maxDrawdownPeakEquity = Number.NaN;
+  let maxDrawdownPeakDate = null;
+  let maxDrawdownTroughEquity = Number.NaN;
+  let maxDrawdownTroughDate = null;
 
   for (const p of equityCurve) {
-    if (!Number.isFinite(p.equity)) continue;
-    if (p.equity > peak) peak = p.equity;
-    if (peak > 0) {
-      const dd = (peak - p.equity) / peak;
-      if (dd > maxDd) {
-        maxDd = dd;
-        maxDdFrom = p.date;
-        maxDdTo = p.date;
-      }
+    if (!p || !Number.isFinite(p.equity)) continue;
+
+    if (p.equity > peakEquity) {
+      peakEquity = p.equity;
+      peakDate = p.date;
+      continue;
+    }
+
+    if (!(peakEquity > 0)) continue;
+    const amount = peakEquity - p.equity;
+    const dd = amount / peakEquity;
+
+    if (dd > maxDrawdown) {
+      maxDrawdown = dd;
+      maxDrawdownPeakEquity = peakEquity;
+      maxDrawdownPeakDate = peakDate;
+      maxDrawdownTroughEquity = p.equity;
+      maxDrawdownTroughDate = p.date;
     }
   }
 
-  return { maxDrawdown: maxDd, maxDrawdownFrom: maxDdFrom, maxDrawdownTo: maxDdTo };
+  if (maxDrawdown === 0 && Number.isFinite(peakEquity)) {
+    maxDrawdownPeakEquity = peakEquity;
+    maxDrawdownPeakDate = peakDate;
+    maxDrawdownTroughEquity = peakEquity;
+    maxDrawdownTroughDate = peakDate;
+  }
+
+  const maxDrawdownAmount = Number.isFinite(maxDrawdownPeakEquity) && Number.isFinite(maxDrawdownTroughEquity)
+    ? (maxDrawdownPeakEquity - maxDrawdownTroughEquity)
+    : Number.NaN;
+
+  return {
+    maxDrawdown,
+    maxDrawdownAmount,
+    maxDrawdownPeakEquity,
+    maxDrawdownPeakDate,
+    maxDrawdownTroughEquity,
+    maxDrawdownTroughDate,
+  };
 }
 
 function simulateLongOnly({
