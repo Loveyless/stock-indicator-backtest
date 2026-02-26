@@ -30,11 +30,3 @@ Get-FileHash stock.zip -Algorithm SHA256
 New-Item -ItemType Directory -Force -Path stock | Out-Null
 Expand-Archive -Force stock.zip stock
 ```
-
-## 一键脚本
-
-见 `scripts/fetch_data.ps1`：
-
-- 支持：下载 → 可选校验 SHA256 → 解压到指定目录
-- 支持：把 `--data-version` 写进报告 `Run Meta` 方便复现
-

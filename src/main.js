@@ -12,7 +12,6 @@
  * 可选参数：
  * - `--mode=stats|backtest`（默认 stats）
  * - `--data-dir=PATH`（数据目录，默认 `./stock`）
- * - `--data-version=STRING`（可选：写进报告 Run Meta，方便复现）
  * - `--start=20070101` / `--end=20220930`
  * - `--days=1,2,3,5,10,20`
  * - `--files=sz000001.csv,sh600000.csv`（只跑指定文件）
@@ -74,7 +73,6 @@ function parseArgs(argv) {
     limit: null,
     quiet: false,
     dataDir: null,
-    dataVersion: null,
     encoding: DEFAULT_ENCODING,
     safeRsv: false,
     exactQuantiles: false,
@@ -94,7 +92,6 @@ function parseArgs(argv) {
     else if (raw === '--exact-quantiles') args.exactQuantiles = true;
     else if (raw.startsWith('--mode=')) args.mode = raw.slice('--mode='.length).trim();
     else if (raw.startsWith('--data-dir=')) args.dataDir = raw.slice('--data-dir='.length).trim();
-    else if (raw.startsWith('--data-version=')) args.dataVersion = raw.slice('--data-version='.length).trim();
     else if (raw.startsWith('--start=')) args.start = raw.slice('--start='.length);
     else if (raw.startsWith('--end=')) args.end = raw.slice('--end='.length);
     else if (raw.startsWith('--days=')) {
@@ -153,7 +150,6 @@ function parseArgs(argv) {
   if (args.start === DEFAULT_START_TIME && getNpmConfig('start')) args.start = String(getNpmConfig('start'));
   if (args.end === DEFAULT_END_TIME && getNpmConfig('end')) args.end = String(getNpmConfig('end'));
   if (args.dataDir === null && getNpmConfig('data_dir')) args.dataDir = String(getNpmConfig('data_dir')).trim() || null;
-  if (args.dataVersion === null && getNpmConfig('data_version')) args.dataVersion = String(getNpmConfig('data_version')).trim() || null;
 
   if (args.days.join(',') === DEFAULT_DAY_LIST.join(',') && getNpmConfig('days')) {
     const list = String(getNpmConfig('days'))
@@ -811,7 +807,6 @@ function main() {
         generated_at: formatBeijingGeneratedAt(now),
         elapsed_seconds: String(elapsedSec),
         data_dir: dataDir,
-        data_version: args.dataVersion ? String(args.dataVersion) : '',
         files_total: String(perFile.length),
         encoding: String(args.encoding),
         mode: 'backtest',
@@ -979,7 +974,6 @@ function main() {
       generated_at: formatBeijingGeneratedAt(now),
       elapsed_seconds: String(elapsedSec),
       data_dir: dataDir,
-      data_version: args.dataVersion ? String(args.dataVersion) : '',
       files_total: String(totalFiles),
       encoding: String(args.encoding),
       start: args.start,
