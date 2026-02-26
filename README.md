@@ -35,6 +35,8 @@
 
 数据格式约束见 `docs/data-contract.md`；数据下载/Release 分发见 `docs/data.md`。
 
+懒人直达：数据包在 GitHub Release `0.1.0`：https://github.com/Loveyless/stock-indicator-backtest/releases/tag/0.1.0
+
 2) 安装依赖：
 
 `npm i`（或 `pnpm i`）
@@ -51,7 +53,9 @@
 
 ## 写策略（strategy.js）
 
-本项目的策略是一个本地 JS 文件：根目录 `strategy.js`，必须导出 `strategy(ctx)`，并返回本周期要买的股票列表：
+根目录 `strategy.js` 是**示例策略**（你可以直接改它，或另存为新文件）。
+
+策略文件必须导出 `strategy(ctx)`，并返回本周期要买的股票列表：
 
 - 主键已定死：返回 **CSV 文件名**（例如 `sh600000.csv`），不是股票代码。
 - 防未来函数：策略应使用 `ctx.asOfYmd`（买入日前一交易日）及更早的数据做信号。
