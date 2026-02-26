@@ -19,7 +19,7 @@
 ## 预览
 
 <p>
-  <img src="./preview.png" alt="量化报告预览" />
+  <img src="./preview.png" alt="量化报告预览" width="650" style="max-width:100%;height:auto;" />
 </p>
 
 ## 这仓库做什么 / 不做什么
