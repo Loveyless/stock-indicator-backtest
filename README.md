@@ -1,22 +1,43 @@
 # stock-indicator-backtest-node
 
-Node.js 版本：A 股“周期轮动”策略回测（周期首个交易日买入、周期最后一个交易日卖出），输出组合资金曲线/回撤/胜率等。
+Node.js 版本：A 股“周期轮动”策略回测引擎。
+
+一句话：你写一个 `strategy.js`（选股逻辑），我帮你按 `D/W/M/Q` 周期自动做“买入→卖出→循环”，并生成一份可视化报告（资金曲线/回撤/胜率等）。
 
 本项目只保留回测输出（已移除统计(stats)报告逻辑）。
 
+## 这仓库做什么 / 不做什么
+
+做什么：
+
+- 回测模式：周期开始买入、周期结束卖出（支持 `--freq=D|W|M|Q`；`D` 为隔夜）
+- 策略插件：从根目录 `strategy.js`（或 `--strategy-file=...`）加载 `strategy(ctx)`，返回本周期要买哪些股票（主键为 CSV 文件名）
+- 输出：生成 `量化分析结果+YYYY_MM_DD_HH_mm_ss.html`（北京时间），含资金曲线 hover tooltip、回撤与金额明细等
+
+不做什么（当前口径必须看清）：
+
+- 当前撮合是“理想化成交”：不限制整手/最小成交单位、不模拟涨跌停/停牌导致的成交失败
+- 缺价处理：买入日或卖出日缺复权收盘价的股票会整期跳过（不建仓）
+
+这些假设会让结果偏乐观，只用于先把策略逻辑跑通和做相对比较。口径细节见 `STRATEGY_API.md`。
+
 ## Quick Start
 
-1) 安装依赖：
+1) 准备数据：把 `*.csv` 放到项目根目录 `stock/`（仓库默认忽略该目录，避免误提交）。
+
+数据格式约束见 `docs/data-contract.md`；数据下载/Release 分发见 `docs/data.md`。
+
+2) 安装依赖：
 
 `npm i`（或 `pnpm i`）
 
-2) 运行（默认读取 `stock/*.csv`）：
+3) 运行回测（默认读取 `stock/*.csv`，默认策略是根目录 `strategy.js`）：
 
 `npm start`（或 `pnpm start`）
 
 运行时会显示处理进度；结束后会在项目根目录生成报告：`量化分析结果+YYYY_MM_DD_HH_mm_ss.html`（北京时间）。
 
-3) 回测（默认从根目录 `strategy.js` 读取策略；周频示例策略为 MA 多头排列）：
+一个可复现的例子（周频，MA 多头排列，限制只跑 1 只）：
 
 `npm run backtest -- --files=sz000001.csv --start=20070101 --end=20220930 --quiet --freq=W --ma=5,10,20 --exclude-st=1`
 
@@ -41,6 +62,9 @@ Node.js 版本：A 股“周期轮动”策略回测（周期首个交易日买�
 - 日频（隔夜）：`pnpm start -- --freq=D --start=20211115 --end=20211130 --limit=50 --quiet`
 - 月频：`pnpm start -- --freq=M --start=20190101 --end=20241231 --limit=200 --quiet`
 - 限制每周期最多选 N 只：`pnpm start -- --pick-limit=10 --quiet`
+
+<details>
+<summary><b>参数列表（点开看，避免信息过载）</b></summary>
 
 ## Parameters
 
@@ -73,6 +97,7 @@ Node.js 版本：A 股“周期轮动”策略回测（周期首个交易日买�
 兼容旧参数（当前理想化成交版本不使用）：
 
 - `--lot=100`（整手/最小成交单位；当前不限制整手，可无限可分）
+</details>
 
 ## Data
 
