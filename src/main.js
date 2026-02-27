@@ -24,6 +24,7 @@
  * - `--freq=D|W|M|Q`（交易频率：日/周/月/季；周期开始买，周期结束卖；日频为隔夜：买入日->下一交易日卖出）
  * - `--strategy=file`（默认 file：从文件加载策略）
  * - `--strategy-file=strategy.js`（默认；策略必须导出名为 strategy 的函数）
+ * - `--strategy-params=JSON`（可选：透传给 strategy(ctx).params 的自定义参数）
  * - `--ma=5,10,20`（示例策略用到：多头排列 MA 快>中>慢）
  * - `--exclude-st=1|0`（示例策略用到：默认 1）
  * - `--pick-limit=NUMBER`（可选：每个周期最多选 N 只；不填则全买）
@@ -51,6 +52,21 @@ function parseBool(s) {
   if (s === undefined || s === null) return false;
   const v = String(s).trim().toLowerCase();
   return v === '1' || v === 'true' || v === 'yes' || v === 'on';
+}
+
+function parseJsonObject(raw, optionName) {
+  const text = String(raw || '').trim();
+  if (!text) return {};
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (e) {
+    throw new Error(`${optionName} 必须是合法 JSON 对象：${text}`);
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(`${optionName} 必须是 JSON 对象：${text}`);
+  }
+  return parsed;
 }
 
 function getNpmConfig(key) {
@@ -81,6 +97,7 @@ function parseArgs(argv) {
 
     strategy: DEFAULT_STRATEGY,
     strategyFile: DEFAULT_STRATEGY_FILE,
+    strategyParamsRaw: '',
     freq: DEFAULT_FREQ,
     ma: '5,10,20',
     excludeSt: true,
@@ -125,6 +142,8 @@ function parseArgs(argv) {
       args.strategy = raw.slice('--strategy='.length).trim();
     } else if (raw.startsWith('--strategy-file=')) {
       args.strategyFile = raw.slice('--strategy-file='.length).trim();
+    } else if (raw.startsWith('--strategy-params=')) {
+      args.strategyParamsRaw = raw.slice('--strategy-params='.length).trim();
     } else if (raw.startsWith('--freq=')) {
       args.freq = raw.slice('--freq='.length).trim().toUpperCase();
     } else if (raw.startsWith('--ma=')) {
@@ -167,6 +186,9 @@ function parseArgs(argv) {
   }
   if (args.strategyFile === DEFAULT_STRATEGY_FILE && getNpmConfig('strategy_file')) {
     args.strategyFile = String(getNpmConfig('strategy_file')).trim() || DEFAULT_STRATEGY_FILE;
+  }
+  if (!args.strategyParamsRaw && getNpmConfig('strategy_params')) {
+    args.strategyParamsRaw = String(getNpmConfig('strategy_params')).trim();
   }
   if (args.freq === DEFAULT_FREQ && getNpmConfig('freq')) {
     args.freq = String(getNpmConfig('freq')).trim().toUpperCase() || DEFAULT_FREQ;
@@ -377,6 +399,7 @@ function labelMetaKeyZh(key) {
     stamp_bps: '印花税(bp)',
     strategy: '回测策略',
     strategy_file: '策略文件',
+    strategy_params: '策略参数(JSON)',
     freq: '交易频率',
     ma: '均线参数',
     exclude_st: '排除ST',
@@ -1024,7 +1047,9 @@ function main() {
 
     const validFiles = new Set(seriesList.map((s) => s.file));
     const cache = new Map();
+    const customStrategyParams = parseJsonObject(args.strategyParamsRaw, '--strategy-params');
     const strategyParams = {
+      ...customStrategyParams,
       maPeriods,
       excludeSt: args.excludeSt,
       pickLimit: args.pickLimit,
@@ -1141,6 +1166,7 @@ function main() {
       `- 缺价处理：若某票在买入日或卖出日缺少收盘复权价（NaN/<=0/不存在该日记录），该票本周期整期跳过（不建仓）。`,
       `- 理想化成交：不考虑涨跌停/停牌导致的成交失败；不限制整手/最小成交单位（可无限可分）。`,
       `- 示例参数：ma=${maPeriods.join(',')}；exclude_st=${args.excludeSt ? '1' : '0'}；pick_limit=${args.pickLimit || '不限'}。`,
+      `- 自定义策略参数：${Object.keys(customStrategyParams).length ? JSON.stringify(customStrategyParams) : '无'}`,
       `- 费用：fee_bps=${args.feeBps}；印花税（卖出）：stamp_bps=${args.stampBps}。`,
     ].join('\n');
 
@@ -1160,6 +1186,7 @@ function main() {
         stamp_bps: String(args.stampBps),
         strategy: String(args.strategy),
         strategy_file: strategyPath,
+        strategy_params: Object.keys(customStrategyParams).length ? JSON.stringify(customStrategyParams) : '',
         freq: freq,
         ma: String(args.ma),
         exclude_st: String(args.excludeSt),

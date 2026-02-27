@@ -14,6 +14,11 @@ function getCached(cache, key, compute) {
   return v;
 }
 
+function toFiniteOrDefault(value, fallback) {
+  const x = Number(value);
+  return Number.isFinite(x) ? x : fallback;
+}
+
 /**
  * 示例策略（strategy.js）
  *
@@ -42,6 +47,9 @@ function strategy(ctx) {
 
   const excludeSt = params.excludeSt !== false;
   const pickLimit = Number.isFinite(params.pickLimit) ? params.pickLimit : null;
+  const minAmount = toFiniteOrDefault(params.minAmount, 0); // 当日最小成交额
+  const maxFloatCap = toFiniteOrDefault(params.maxFloatCap, Number.POSITIVE_INFINITY); // 当日最大流通市值
+  const minPrice = toFiniteOrDefault(params.minPrice, 0); // 信号日最低复权收盘价
 
   const picks = [];
 
@@ -62,6 +70,18 @@ function strategy(ctx) {
     const m = maMid[idx];
     const l = maSlow[idx];
     if (!isFiniteNumber(f) || !isFiniteNumber(m) || !isFiniteNumber(l)) continue;
+    const close = s.closeAdj[idx];
+    if (!isFiniteNumber(close) || close < minPrice) continue;
+
+    // 可配置阈值过滤（不传参数就不生效）
+    if (minAmount > 0) {
+      const amount = Array.isArray(s.amount) ? s.amount[idx] : Number.NaN;
+      if (!isFiniteNumber(amount) || amount < minAmount) continue;
+    }
+    if (Number.isFinite(maxFloatCap)) {
+      const floatCap = Array.isArray(s.marketCapFloat) ? s.marketCapFloat[idx] : Number.NaN;
+      if (!isFiniteNumber(floatCap) || floatCap > maxFloatCap) continue;
+    }
 
     // 多头排列：MA(快) > MA(中) > MA(慢)
     if (!(f > m && m > l)) continue;
