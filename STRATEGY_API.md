@@ -47,6 +47,9 @@ module.exports = { strategy };
   - `maPeriods`：如 `[5,10,20]`
   - `excludeSt`：是否排除 ST
   - `pickLimit`：每周期选股上限（引擎也会再截断一次）
+  - `minAmount`：最小成交额（示例策略可选）
+  - `maxFloatCap`：最大流通市值（示例策略可选）
+  - `minPrice`：最低复权收盘价（示例策略可选）
 - `ctx.ind`：指标工具库（实现见 `src/indicators.js`，口径说明见 `STRATEGY_INDICATORS.md`）
 - `ctx.cache`：`Map`，跨周期缓存（建议把 MA/EMA 等数组缓存下来，避免重复计算）
 - `ctx.util`：工具函数（实现见 `src/seriesUtils.js`）
@@ -67,6 +70,10 @@ module.exports = { strategy };
 项目根目录自带一个示例：`strategy.js`（多头排列 MA，按 `asOfYmd` 计算信号）。
 
 你可以直接改它来写自己的策略。
+
+CLI 传自定义参数（JSON）：
+
+`pnpm start -- --strategy-params='{"minAmount":80000000,"maxFloatCap":150000000000,"minPrice":3}'`
 
 ## 6) 最小可运行模板（推荐直接复制改）
 

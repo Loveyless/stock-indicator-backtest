@@ -77,11 +77,16 @@
 
 `pnpm start -- --strategy-file=./my_strategy.js --freq=W --start=20211115 --end=20211231 --quiet`
 
+也可以直接传自定义阈值参数（JSON）给 `ctx.params`：
+
+`pnpm start -- --strategy-params='{"minAmount":80000000,"maxFloatCap":150000000000,"minPrice":3}' --quiet`
+
 ## 示例命令
 
 - 日频（隔夜）：`pnpm start -- --freq=D --start=20211115 --end=20211130 --limit=50 --quiet`
 - 月频：`pnpm start -- --freq=M --start=20190101 --end=20241231 --limit=200 --quiet`
 - 限制每周期最多选 N 只：`pnpm start -- --pick-limit=10 --quiet`
+- 开启示例阈值过滤：`pnpm start -- --strategy-params='{"minAmount":50000000,"maxFloatCap":80000000000}' --quiet`
 
 <details>
 <summary><b>参数列表（点开看，避免信息过载）</b></summary>
@@ -110,6 +115,7 @@
 - `--freq=D|W|M|Q`（交易频率：日/周/月/季；日频为隔夜：买入日→下一交易日卖出；默认 W）
 - `--strategy=file`（默认 file：从文件加载策略）
 - `--strategy-file=strategy.js`（默认；策略必须导出名为 `strategy` 的函数）
+- `--strategy-params=JSON`（可选：透传到 `strategy(ctx).params`，用于阈值调参）
 - `--ma=5,10,20`（多头排列：MA 快>中>慢；基于复权收盘价 `收盘价_复权`）
 - `--exclude-st=1|0`（是否排除 ST，默认 1；判断来自 `股票名称` 含 `ST/*ST`）
 - `--pick-limit=NUMBER`（可选：每周期最多选 N 只；不填则全买）

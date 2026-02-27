@@ -12,3 +12,7 @@
 快速跑一次：
 
 `pnpm start -- --freq=W --start=20211115 --end=20211231 --limit=50 --quiet`
+
+快速调阈值（不改代码）：
+
+`pnpm start -- --strategy-params='{"minAmount":80000000,"maxFloatCap":150000000000,"minPrice":3}' --quiet`
