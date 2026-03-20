@@ -18,7 +18,7 @@
 ## 报告预览
 
 <p align="center">
-  <img src="./preview.png" alt="量化报告预览" width="640" style="width:66%;max-width:640px;height:auto;" />
+  <img src="./preview.png" alt="量化报告预览" />
 </p>
 
 ## 3 分钟跑通（新手版）
